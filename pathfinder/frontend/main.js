@@ -38,14 +38,14 @@ animate();
 
 // Globe generation
 
-let mapCanvas, mapCtx, globeTexture;
+let mapCanvas, mapCtx, globeTexture, globeMesh;
 
 async function loadGlobe() {
     const statusText = document.getElementById("status");
     statusText.innerText = "Fetching map data from Python...";
 
     try {
-        const response = await fetch('http://127.0.0.1:5000/api/map?width=128&height=64');
+        const response = await fetch('http://127.0.0.1:5000/api/map?width=512&height=256');
         const data = await response.json();
         
         const grid = data.grid;
@@ -85,7 +85,7 @@ async function loadGlobe() {
         // A 3D 15 radius sphere, with 64x32 segments for smoothness
         const geometry = new THREE.SphereGeometry(15, 64, 32);
         const material = new THREE.MeshStandardMaterial({ map: globeTexture });
-        const globeMesh = new THREE.Mesh(geometry, material);
+        globeMesh = new THREE.Mesh(geometry, material);
         
         scene.add(globeMesh);
 
@@ -98,3 +98,110 @@ async function loadGlobe() {
 }
 
 loadGlobe();
+
+const raycaster = new THREE.Raycaster();
+const mouse = new THREE.Vector2();
+
+let startPoint = null;
+let endPoint = null;
+const statusText = document.getElementById("status");
+
+// distinguish click from drag
+let mouseDownPosition = { x: 0, y: 0 };
+
+window.addEventListener('mousedown', (event) => {
+    // Record where the mouse was when pressed down
+    mouseDownPosition.x = event.clientX;
+    mouseDownPosition.y = event.clientY;
+});
+
+window.addEventListener('mouseup', (event) => {
+    const deltaX = Math.abs(event.clientX - mouseDownPosition.x);
+    const deltaY = Math.abs(event.clientY - mouseDownPosition.y);
+    
+    // if the mouse moved less than 5 pixels in any direction, it was a real click
+    if (deltaX < 5 && deltaY < 5) {
+        onMouseClick(event);
+    }
+});
+
+
+function onMouseClick(event) {
+    mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+    mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+
+    raycaster.setFromCamera(mouse, camera);
+
+    if (!globeMesh) return;
+    
+    const intersects = raycaster.intersectObject(globeMesh);
+
+    if (intersects.length > 0) {
+        const hit = intersects[0];
+        const uv = hit.uv;
+
+        const gridX = Math.floor(uv.x * mapCanvas.width);
+        
+
+        const gridY = Math.floor((1.0 - uv.y) * mapCanvas.height);
+
+        // Start point or end point logic
+        if (!startPoint) {
+            startPoint = { x: gridX, y: gridY };
+            statusText.innerText = `Start Point set at [${gridX}, ${gridY}]. Click destination!`;
+        } else if (!endPoint) {
+            endPoint = { x: gridX, y: gridY };
+            statusText.innerText = `Calculating path from [${startPoint.x}, ${startPoint.y}] to [${endPoint.x}, ${endPoint.y}]...`;
+            
+            fetchPath(startPoint, endPoint);
+            
+            startPoint = null; 
+            endPoint = null;
+        }
+    }
+}
+
+async function fetchPath(start, end) {
+    try {
+        const response = await fetch('http://127.0.0.1:5000/api/path', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                start_x: start.x,
+                start_y: start.y,
+                end_x: end.x,
+                end_y: end.y
+            })
+        });
+
+        const data = await response.json();
+
+        // Check if a valid spot was clicked
+        if (data.error) {
+            statusText.innerText = `Error: ${data.error}`;
+            return;
+        }
+
+        statusText.innerText = `Success! Path found. Energy Cost: ${data.total_cost}`;
+        drawPath(data.path);
+
+    } catch (error) {
+        console.error("Pathfinding error:", error);
+        statusText.innerText = "Error calculating path. Check the Python terminal.";
+    }
+}
+
+function drawPath(pathCoordinates) {
+    mapCtx.fillStyle = '#ff4500'; 
+    
+    for (let i = 0; i < pathCoordinates.length; i++) {
+        const x = pathCoordinates[i][0];
+        const y = pathCoordinates[i][1];
+        
+        mapCtx.fillRect(x, y, 1, 1);
+    }
+    
+    globeTexture.needsUpdate = true;
+}
