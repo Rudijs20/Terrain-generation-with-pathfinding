@@ -19,25 +19,27 @@ def generate_terrain(width=64, height=32, num_peaks=20, num_lakes=5):
 
     max_elevation = 0.0
 
-    # loop though every cell and checks its distance to every peak
+# loop though every cell and checks its distance to every peak
     for y in range(height):
-            for x in range(width):
-                cell_elevation = 0.0
+        for x in range(width):
+            cell_elevation = 0.0
+            
+            # distance to peak
+            for px, py, intensity in peaks:
+                dx = x - px
+                dy = y - py
                 
-                # distance to peak
-                for px, py, intensity in peaks:
-                    dx = abs(x - px)
-                    dy = abs(y - py)
-                    
-                    distance = math.sqrt(dx * dx + dy * dy)
-                    
-                    # The further the point for a peak less elevation is given
-                    # + 1.0 so it doens't divde by 0 on the peak
-                    cell_elevation += intensity / (1.0 + distance)
+                dist_squared = (dx * dx) + (dy * dy)
                 
-                elevation_map[y][x] = round(cell_elevation, 1)
+                # The spread controls how wide and smooth the mountain base is.
+                # Higher number means wider, smoother mountains.
+                spread = 30.0 
                 
-                max_elevation = max(max_elevation, cell_elevation)
+                # This creates a, smooth bell-curve mountain
+                cell_elevation += intensity * math.exp(-dist_squared / spread)
+            
+            elevation_map[y][x] = round(cell_elevation, 1)
+            max_elevation = max(max_elevation, cell_elevation)
                     
 
     # First generate only land, mountains and snow
@@ -46,7 +48,7 @@ def generate_terrain(width=64, height=32, num_peaks=20, num_lakes=5):
         for x in range(width):
             normalized = (elevation_map[y][x] / max_elevation) * 100
             
-            if normalized < 65:
+            if normalized < 55:
                 terrain_grid[y][x] = {"type": "land", "cost": 1, "elevation": round(normalized, 1)}
             elif normalized < 90:
                 terrain_grid[y][x] = {"type": "mountain", "cost": 5, "elevation": round(normalized, 1)}
@@ -72,7 +74,7 @@ def generate_terrain(width=64, height=32, num_peaks=20, num_lakes=5):
                 valid_spot = True
                 
             attempts += 1
-            
+
         # Lakes stop at corners of the map and don't wrap around  
         if valid_spot:
             radius = random.uniform(1.0, max_lake_radius)

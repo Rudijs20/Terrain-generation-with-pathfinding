@@ -42,9 +42,25 @@ async function loadMap() {
     statusText.innerText = "Fetching map data from Python...";
 
     try {
-        const response = await fetch('http://127.0.0.1:5000/api/map?width=128&height=64');
-        const data = await response.json();
+        // First delete the map if already there
+        if (mapMesh) {
+            scene.remove(mapMesh);
+            mapMesh.geometry.dispose();
+            mapMesh.material.dispose();
+            mapTexture.dispose();
+            
+            // Reset points
+            startPoint = null;
+            endPoint = null;
+        }
 
+        const w = document.getElementById('ui-width').value;
+        const h = document.getElementById('ui-height').value;
+        const p = document.getElementById('ui-peaks').value;
+        const l = document.getElementById('ui-lakes').value;
+
+        const response = await fetch(`http://127.0.0.1:5000/api/map?width=${w}&height=${h}&peaks=${p}&lakes=${l}`);
+        const data = await response.json();
         const grid = data.grid;
         const width = data.width;
         const height = data.height;
@@ -54,7 +70,7 @@ async function loadMap() {
         mapCanvas.height = height;
         mapCtx = mapCanvas.getContext('2d');
 
-        // This loops through the Python data and paint the canvas
+        // loop through the Python data and paint the canvas
         for (let y = 0; y < height; y++) {
             for (let x = 0; x < width; x++) {
                 const cell = grid[y][x];
@@ -79,9 +95,12 @@ async function loadMap() {
         mapTexture.magFilter = THREE.NearestFilter;
         mapTexture.minFilter = THREE.NearestFilter;
 
-
-        const geometry = new THREE.PlaneGeometry(30, 15, width - 1, height - 1);
+        const tileSize = 0.25; 
+        const physicalWidth = width * tileSize;
+        const physicalHeight = height * tileSize;
         
+        const geometry = new THREE.PlaneGeometry(physicalWidth, physicalHeight, width - 1, height - 1);
+                
         // Extrude the squares based on the elevation to make it look 3d like
         const vertices = geometry.attributes.position.array;
         
@@ -148,6 +167,9 @@ window.addEventListener('mouseup', (event) => {
     }
 });
 
+document.getElementById('generate-btn').addEventListener('click', () => {
+    loadMap();
+});
 
 function onMouseClick(event) {
     mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
