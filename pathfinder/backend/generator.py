@@ -26,15 +26,7 @@ def generate_terrain(width=64, height=32, num_peaks=20, num_lakes=5):
                 
                 # distance to peak
                 for px, py, intensity in peaks:
-                    
                     dx = abs(x - px)
-                    
-                    # Globe wrap around trick: 
-                    # If the distance across the map is further
-                    # than going off the edge take the short cut
-                    if dx > (width / 2):
-                        dx = width - dx
-                        
                     dy = abs(y - py)
                     
                     distance = math.sqrt(dx * dx + dy * dy)
@@ -81,26 +73,18 @@ def generate_terrain(width=64, height=32, num_peaks=20, num_lakes=5):
                 
             attempts += 1
             
+        # Lakes stop at corners of the map and don't wrap around  
         if valid_spot:
             radius = random.uniform(1.0, max_lake_radius)
             for y in range(height):
                 for x in range(width):
                     dx = abs(x - lx)
-                    if dx > (width / 2): dx = width - dx
                     dy = abs(y - ly)
                     
                     if math.sqrt(dx*dx + dy*dy) <= radius:
                         # Double check that only land is overwritten
                         if terrain_grid[y][x]["type"] == "land":
                             terrain_grid[y][x] = {"type": "water", "cost": -1, "elevation": round(normalized, 1)}                                            
-
-    # This adds polar ice caps to the top and bottom 10% of the globe
-    cap_size = int(height * 0.10) 
-    
-    for y in range(height):
-        for x in range(width):
-            if y < cap_size or y > (height - cap_size):
-                terrain_grid[y][x] = {"type": "snow", "cost": 10, "elevation": 100.0}
 
     return terrain_grid
                 

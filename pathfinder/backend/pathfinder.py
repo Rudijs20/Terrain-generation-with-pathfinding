@@ -1,11 +1,8 @@
 import heapq
 
-# This calculates the diagonal (Octile) distance betwee two points (inlcuding globe shortcut)
-def heuristic(x1, y1, x2, y2, width):
-
+# This calculates the diagonal (Octile) distance between two points
+def heuristic(x1, y1, x2, y2):
     dx = abs(x1 - x2)
-    if dx > (width / 2):
-        dx = width - dx
     dy = abs(y1 - y2)
     
 
@@ -50,12 +47,11 @@ def find_path(grid, start_x, start_y, end_x, end_y):
                 if x_offset == 0 and y_offset == 0:
                     continue
                     
+                nx = current_x + x_offset
                 ny = current_y + y_offset
-                # wraps around the globe with modulo
-                nx = (current_x + x_offset) % width
                 
-                # boudry check
-                if 0 <= ny < height:
+                # boundary check for the flat map
+                if 0 <= nx < width and 0 <= ny < height:
                     is_diagonal = (x_offset != 0 and y_offset != 0)
                     neighbors.append((nx, ny, is_diagonal))
 
@@ -86,7 +82,7 @@ def find_path(grid, start_x, start_y, end_x, end_y):
                 cost_so_far[(nx, ny)] = new_cost
                 
                 # Priority = actual cost so far + heuristic guess to the end
-                priority = new_cost + heuristic(nx, ny, end_x, end_y, width)
+                priority = new_cost + heuristic(nx, ny, end_x, end_y)
                 heapq.heappush(queue, (priority, nx, ny))
                 
                 # Leave a markers pointing backward

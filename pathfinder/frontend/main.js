@@ -4,7 +4,7 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 const scene = new THREE.Scene();
 
 const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-camera.position.z = 40;
+camera.position.z = 20;
 
 const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setSize(window.innerWidth, window.innerHeight);
@@ -13,17 +13,11 @@ document.body.appendChild(renderer.domElement);
 // camera movement controls
 const controls = new OrbitControls(camera, renderer.domElement);
 controls.enableDamping = true;
-
-const ambientLight = new THREE.AmbientLight(0xffffff, 0.6); 
-scene.add(ambientLight);
-
-const sunLight = new THREE.DirectionalLight(0xffffff, 1);
-sunLight.position.set(50, 50, 50);
-scene.add(sunLight);
+controls.enableRotate = false;
 
 function animate() {
     requestAnimationFrame(animate);
-    
+
     controls.update();
     renderer.render(scene, camera);
 }
@@ -36,18 +30,18 @@ window.addEventListener('resize', () => {
 
 animate();
 
-// Globe generation
+// Flat map generation
 
-let mapCanvas, mapCtx, globeTexture, globeMesh;
+let mapCanvas, mapCtx, mapTexture, mapMesh;
 
-async function loadGlobe() {
+async function loadMap() {
     const statusText = document.getElementById("status");
     statusText.innerText = "Fetching map data from Python...";
 
     try {
-        const response = await fetch('http://127.0.0.1:5000/api/map?width=512&height=256');
+        const response = await fetch('http://127.0.0.1:5000/api/map?width=128&height=64');
         const data = await response.json();
-        
+
         const grid = data.grid;
         const width = data.width;
         const height = data.height;
@@ -61,9 +55,9 @@ async function loadGlobe() {
         for (let y = 0; y < height; y++) {
             for (let x = 0; x < width; x++) {
                 const cell = grid[y][x];
-                
+
                 if (cell.type === 'water') {
-                    mapCtx.fillStyle = '#0f5e9c'; 
+                    mapCtx.fillStyle = '#0f5e9c';
                 } else if (cell.type === 'land') {
                     const greenValue = Math.floor(180 - (cell.elevation));
                     mapCtx.fillStyle = `rgb(34, ${greenValue}, 34)`;
@@ -77,19 +71,19 @@ async function loadGlobe() {
             }
         }
 
-        globeTexture = new THREE.CanvasTexture(mapCanvas);
-        
-        globeTexture.magFilter = THREE.NearestFilter;
-        globeTexture.minFilter = THREE.NearestFilter;
+        mapTexture = new THREE.CanvasTexture(mapCanvas);
 
-        // A 3D 15 radius sphere, with 64x32 segments for smoothness
-        const geometry = new THREE.SphereGeometry(15, 64, 32);
-        const material = new THREE.MeshStandardMaterial({ map: globeTexture });
-        globeMesh = new THREE.Mesh(geometry, material);
-        
-        scene.add(globeMesh);
+        mapTexture.magFilter = THREE.NearestFilter;
+        mapTexture.minFilter = THREE.NearestFilter;
 
-        statusText.innerText = "Globe loaded! (Rotate with mouse)";
+
+        const geometry = new THREE.PlaneGeometry(30, 15);
+        const material = new THREE.MeshBasicMaterial({ map: mapTexture });
+        mapMesh = new THREE.Mesh(geometry, material);
+
+        scene.add(mapMesh);
+
+        statusText.innerText = "Map loaded! Click a start point.";
 
     } catch (error) {
         console.error("Error fetching map:", error);
@@ -97,7 +91,7 @@ async function loadGlobe() {
     }
 }
 
-loadGlobe();
+loadMap();
 
 const raycaster = new THREE.Raycaster();
 const mouse = new THREE.Vector2();
@@ -118,7 +112,7 @@ window.addEventListener('mousedown', (event) => {
 window.addEventListener('mouseup', (event) => {
     const deltaX = Math.abs(event.clientX - mouseDownPosition.x);
     const deltaY = Math.abs(event.clientY - mouseDownPosition.y);
-    
+
     // if the mouse moved less than 5 pixels in any direction, it was a real click
     if (deltaX < 5 && deltaY < 5) {
         onMouseClick(event);
@@ -132,18 +126,16 @@ function onMouseClick(event) {
 
     raycaster.setFromCamera(mouse, camera);
 
-    if (!globeMesh) return;
-    
-    const intersects = raycaster.intersectObject(globeMesh);
+    if (!mapMesh) return;
+
+    const intersects = raycaster.intersectObject(mapMesh);
 
     if (intersects.length > 0) {
         const hit = intersects[0];
         const uv = hit.uv;
 
-        const gridX = Math.floor(uv.x * mapCanvas.width);
-        
-
-        const gridY = Math.floor((1.0 - uv.y) * mapCanvas.height);
+        const gridX = Math.min(Math.floor(uv.x * mapCanvas.width), mapCanvas.width - 1);
+        const gridY = Math.min(Math.floor((1.0 - uv.y) * mapCanvas.height), mapCanvas.height - 1);
 
         // Start point or end point logic
         if (!startPoint) {
@@ -152,10 +144,10 @@ function onMouseClick(event) {
         } else if (!endPoint) {
             endPoint = { x: gridX, y: gridY };
             statusText.innerText = `Calculating path from [${startPoint.x}, ${startPoint.y}] to [${endPoint.x}, ${endPoint.y}]...`;
-            
+
             fetchPath(startPoint, endPoint);
-            
-            startPoint = null; 
+
+            startPoint = null;
             endPoint = null;
         }
     }
@@ -194,14 +186,14 @@ async function fetchPath(start, end) {
 }
 
 function drawPath(pathCoordinates) {
-    mapCtx.fillStyle = '#ff4500'; 
-    
+    mapCtx.fillStyle = '#ff4500';
+
     for (let i = 0; i < pathCoordinates.length; i++) {
         const x = pathCoordinates[i][0];
         const y = pathCoordinates[i][1];
-        
+
         mapCtx.fillRect(x, y, 1, 1);
     }
-    
-    globeTexture.needsUpdate = true;
+
+    mapTexture.needsUpdate = true;
 }
