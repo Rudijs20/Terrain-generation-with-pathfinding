@@ -1,8 +1,8 @@
 import random
 import math
 
-def generate_terrain(width=64, height=32, num_peaks=20):
-        
+def generate_terrain(width=64, height=32, num_peaks=20, num_lakes=5, num_rivers=4):
+            
     elevation_map = [[0.0 for _ in range(width)] for _ in range(height)]
 
     peaks = []
@@ -47,14 +47,72 @@ def generate_terrain(width=64, height=32, num_peaks=20):
                 
                 max_elevation = max(max_elevation, cell_elevation)
                     
-    return elevation_map, max_elevation
 
-# testing a smaller map to see if the peaks fall off actaully
+    # First generate only land, mountains and snow
+    terrain_grid = [[None for _ in range(width)] for _ in range(height)]
+    for y in range(height):
+        for x in range(width):
+            normalized = (elevation_map[y][x] / max_elevation) * 100
+            
+            if normalized < 65:
+                terrain_grid[y][x] = {"type": "land", "cost": 1}
+            elif normalized < 90:
+                terrain_grid[y][x] = {"type": "mountain", "cost": 5}
+            else:
+                terrain_grid[y][x] = {"type": "snow", "cost": 10}
+
+    # Add lakes (They are added farther away from mountains more in lowlands)
+    max_lake_radius = max(1.5, min(width, height) * 0.08)  # adjusts lake size based on map size
+
+    for _ in range(num_lakes):
+        valid_spot = False
+        attempts = 0
+        
+        while not valid_spot and attempts < 100:
+            lx = random.randint(0, width - 1)
+            ly = random.randint(0, height - 1)
+            
+            # Check the weight (height) of this spot
+            normalized = (elevation_map[ly][lx] / max_elevation) * 100
+            
+            # This makes the lakes be added only on location bellow 50 height
+            if terrain_grid[ly][lx]["type"] == "land" and normalized < 50:
+                valid_spot = True
+                
+            attempts += 1
+            
+        if valid_spot:
+            radius = random.uniform(1.0, max_lake_radius)
+            for y in range(height):
+                for x in range(width):
+                    dx = abs(x - lx)
+                    if dx > (width / 2): dx = width - dx
+                    dy = abs(y - ly)
+                    
+                    if math.sqrt(dx*dx + dy*dy) <= radius:
+                        # Double check that only land is overwritten
+                        if terrain_grid[y][x]["type"] == "land":
+                            terrain_grid[y][x] = {"type": "water", "cost": -1}
+                                            
+    return terrain_grid
+                
+# print a ASCII make to visualise the look
 if __name__ == "__main__":
-    test_grid, highest_point = generate_terrain(width=15, height=8, num_peaks=3)
+    test_width = 40
+    test_height = 15
+    final_map = generate_terrain(width=test_width, height=test_height, num_peaks=8)
     
-    print(f"Highest point on the map: {highest_point:.1f}\n")
-    print("The Topographical Map:")
-    for row in test_grid:
-        formatted_row = ["{:>5}".format(val) for val in row]
-        print(formatted_row)
+    # ~ = Water, . = Land, ^ = Mountain, * = Snow
+    for row in final_map:
+        row_string = ""
+        for cell in row:
+            if cell["type"] == "water":
+                row_string += "~~"
+            elif cell["type"] == "land":
+                row_string += ".."
+            elif cell["type"] == "mountain":
+                row_string += "^^"
+            elif cell["type"] == "snow":
+                row_string += "**"
+        print(row_string)
+    print("\n")
