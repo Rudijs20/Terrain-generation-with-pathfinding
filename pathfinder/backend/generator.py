@@ -55,11 +55,11 @@ def generate_terrain(width=64, height=32, num_peaks=20, num_lakes=5, num_rivers=
             normalized = (elevation_map[y][x] / max_elevation) * 100
             
             if normalized < 65:
-                terrain_grid[y][x] = {"type": "land", "cost": 1}
+                terrain_grid[y][x] = {"type": "land", "cost": 1, "elevation": round(normalized, 1)}
             elif normalized < 90:
-                terrain_grid[y][x] = {"type": "mountain", "cost": 5}
+                terrain_grid[y][x] = {"type": "mountain", "cost": 5, "elevation": round(normalized, 1)}
             else:
-                terrain_grid[y][x] = {"type": "snow", "cost": 10}
+                terrain_grid[y][x] = {"type": "snow", "cost": 10, "elevation": round(normalized, 1)}
 
     # Add lakes (They are added farther away from mountains more in lowlands)
     max_lake_radius = max(1.5, min(width, height) * 0.08)  # adjusts lake size based on map size
@@ -92,8 +92,7 @@ def generate_terrain(width=64, height=32, num_peaks=20, num_lakes=5, num_rivers=
                     if math.sqrt(dx*dx + dy*dy) <= radius:
                         # Double check that only land is overwritten
                         if terrain_grid[y][x]["type"] == "land":
-                            terrain_grid[y][x] = {"type": "water", "cost": -1}
-                                            
+                            terrain_grid[y][x] = {"type": "water", "cost": -1, "elevation": round(normalized, 1)}                                            
     return terrain_grid
                 
 # print a ASCII make to visualise the look
