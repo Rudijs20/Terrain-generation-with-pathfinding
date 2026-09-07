@@ -2,31 +2,34 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
 const scene = new THREE.Scene();
-
 const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-camera.position.z = 20;
+
+camera.position.set(0, 15, 20); 
 
 const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setSize(window.innerWidth, window.innerHeight);
 document.body.appendChild(renderer.domElement);
 
-// camera movement controls
+// controls locked for tabletop look
 const controls = new OrbitControls(camera, renderer.domElement);
 controls.enableDamping = true;
-controls.enableRotate = false;
+controls.enableRotate = true; // Turn rotation back on!
+controls.maxPolarAngle = Math.PI / 2.2; // Prevents camera from going under the map
+controls.minPolarAngle = Math.PI / 4;   // Prevents camera from going perfectly top-down
+
+// 3. Add Lighting for the 3D shadows
+const ambientLight = new THREE.AmbientLight(0xffffff, 0.4);
+scene.add(ambientLight);
+
+const dirLight = new THREE.DirectionalLight(0xffffff, 1.0);
+dirLight.position.set(10, 40, 20); // Simulates the sun
+scene.add(dirLight);
 
 function animate() {
     requestAnimationFrame(animate);
-
     controls.update();
     renderer.render(scene, camera);
 }
-
-window.addEventListener('resize', () => {
-    camera.aspect = window.innerWidth / window.innerHeight;
-    camera.updateProjectionMatrix();
-    renderer.setSize(window.innerWidth, window.innerHeight);
-});
 
 animate();
 
@@ -77,10 +80,36 @@ async function loadMap() {
         mapTexture.minFilter = THREE.NearestFilter;
 
 
-        const geometry = new THREE.PlaneGeometry(30, 15);
-        const material = new THREE.MeshBasicMaterial({ map: mapTexture });
-        mapMesh = new THREE.Mesh(geometry, material);
+        const geometry = new THREE.PlaneGeometry(30, 15, width - 1, height - 1);
+        
+        // Extrude the squares based on the elevation to make it look 3d like
+        const vertices = geometry.attributes.position.array;
+        
+        // Every vertex has 3 coordinates (x, y, z) so it loop by 3s
+        for (let i = 0; i < vertices.length; i += 3) {
+            const vertexIndex = i / 3;
+            const gridX = vertexIndex % width;
+            const gridY = Math.floor(vertexIndex / width);
+            
+            const cell = grid[gridY][gridX];
+            
+            if (cell.type !== 'water') {
+                const elevationBoost = (cell.elevation / 100) * 3; 
+                vertices[i + 2] = elevationBoost; // Modifying the Z axis
+            }
+        }
+        
+        geometry.computeVertexNormals();
 
+        const material = new THREE.MeshStandardMaterial({ 
+            map: mapTexture,
+            flatShading: true
+        });
+
+        mapMesh = new THREE.Mesh(geometry, material);
+        
+        // Lay the board flat like a table on the floor
+        mapMesh.rotation.x = -Math.PI / 2;
         scene.add(mapMesh);
 
         statusText.innerText = "Map loaded! Click a start point.";

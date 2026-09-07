@@ -22,9 +22,19 @@
     </script>
 </head>
 <body>
-    <div id="ui">
-        <h2>2D Pathfinder</h2>
+<div id="ui" style="background: rgba(0,0,0,0.7); padding: 15px; border-radius: 8px;">
+        <h2 style="margin-top: 0;">2D Pathfinder</h2>
+        
+        <div style="display: flex; gap: 10px; margin-bottom: 15px; flex-wrap: wrap; max-width: 300px;">
+            <label>Width: <input type="number" id="ui-width" value="128" style="width: 50px;"></label>
+            <label>Height: <input type="number" id="ui-height" value="64" style="width: 50px;"></label>
+            <label>Peaks: <input type="number" id="ui-peaks" value="25" style="width: 50px;"></label>
+            <label>Lakes: <input type="number" id="ui-lakes" value="10" style="width: 50px;"></label>
+            <button id="generate-btn" style="width: 100%; padding: 8px; cursor: pointer; background: #4CAF50; color: white; border: none; border-radius: 4px;">Generate New World</button>
+        </div>
+
         <p id="status">Loading map data...</p>
+        <button id="reset-btn" style="padding: 8px 16px; margin-top: 10px; cursor: pointer; background: #333; color: white; border: 1px solid #666; border-radius: 4px;">Clear Path</button>
     </div>
 
     <script type="module" src="main.js"></script>
