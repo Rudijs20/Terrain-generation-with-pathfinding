@@ -17,7 +17,6 @@ controls.enableRotate = true; // Turn rotation back on!
 controls.maxPolarAngle = Math.PI / 2.2; // Prevents camera from going under the map
 controls.minPolarAngle = Math.PI / 4;   // Prevents camera from going perfectly top-down
 
-// 3. Add Lighting for the 3D shadows
 const ambientLight = new THREE.AmbientLight(0xffffff, 0.4);
 scene.add(ambientLight);
 
@@ -36,6 +35,12 @@ animate();
 // Flat map generation
 
 let mapCanvas, mapCtx, mapTexture, mapMesh;
+
+// Game actors
+let bearMesh, rabbitMesh;
+let bearGridPos = { x: 0, y: 0 };
+let rabbitGridPos = { x: 0, y: 0 };
+let currentGridData;
 
 async function loadMap() {
     const statusText = document.getElementById("status");
@@ -62,6 +67,7 @@ async function loadMap() {
         const response = await fetch(`http://127.0.0.1:5000/api/map?width=${w}&height=${h}&peaks=${p}&lakes=${l}`);
         const data = await response.json();
         const grid = data.grid;
+        currentGridData = grid;
         const width = data.width;
         const height = data.height;
 
@@ -131,12 +137,15 @@ async function loadMap() {
         mapMesh.rotation.x = -Math.PI / 2;
         scene.add(mapMesh);
 
+        spawnActors(width, height);
+
         statusText.innerText = "Map loaded! Click a start point.";
 
     } catch (error) {
         console.error("Error fetching map:", error);
         statusText.innerText = "Error loading map. Is the Flask server running?";
     }
+
 }
 
 loadMap();
@@ -198,8 +207,27 @@ function onMouseClick(event) {
 
         // Start point or end point logic
         if (!startPoint) {
+            repaintMap(); // Wipe the old red path away
+            
             startPoint = { x: gridX, y: gridY };
-            statusText.innerText = `Start Point set at [${gridX}, ${gridY}]. Click destination!`;
+            statusText.innerText = `Bear spawned. Click destination for the Rabbit!`;
+            
+            // This shows the Bear and snap him to the clicked tile
+            bearMesh.visible = true;
+            rabbitMesh.visible = false; // this hides the old rabbit
+            const pos = get3DPosition(gridX, gridY, mapCanvas.width, mapCanvas.height);
+            bearMesh.position.copy(pos);
+            
+        } else if (!endPoint) {
+            endPoint = { x: gridX, y: gridY };
+            statusText.innerText = `Calculating hunt path...`;
+            
+            // Show the Rabbit and snap him to the destination
+            rabbitMesh.visible = true;
+            const pos = get3DPosition(gridX, gridY, mapCanvas.width, mapCanvas.height);
+            rabbitMesh.position.copy(pos);
+            
+            fetchPath(startPoint, endPoint);
         } else if (!endPoint) {
             endPoint = { x: gridX, y: gridY };
             statusText.innerText = `Calculating path from [${startPoint.x}, ${startPoint.y}] to [${endPoint.x}, ${endPoint.y}]...`;
@@ -237,6 +265,7 @@ async function fetchPath(start, end) {
 
         statusText.innerText = `Success! Path found. Energy Cost: ${data.total_cost}`;
         drawPath(data.path);
+        animateHunt(data.path);
 
     } catch (error) {
         console.error("Pathfinding error:", error);
@@ -255,4 +284,101 @@ function drawPath(pathCoordinates) {
     }
 
     mapTexture.needsUpdate = true;
+}
+
+
+// Actor logic
+function get3DPosition(gridX, gridY, width, height) {
+    const tileSize = 0.25; 
+    const localX = (gridX * tileSize) - ((width * tileSize) / 2) + (tileSize / 2);
+    const localY = -((gridY * tileSize) - ((height * tileSize) / 2) + (tileSize / 2));
+    
+    const cell = currentGridData[gridY][gridX];
+    let localZ = -0.2;
+    
+    if (cell.type !== 'water') {
+        localZ = (cell.elevation / 100) * 3;
+    }
+    
+    return new THREE.Vector3(localX, localY, localZ + 0.15); 
+}
+
+function spawnActors(width, height) {
+    if (bearMesh) mapMesh.remove(bearMesh);
+    if (rabbitMesh) mapMesh.remove(rabbitMesh);
+    
+    const bearGeo = new THREE.BoxGeometry(0.3, 0.3, 0.3);
+    const bearMat = new THREE.MeshStandardMaterial({ color: 0x8B4513 }); 
+    bearMesh = new THREE.Mesh(bearGeo, bearMat);
+    
+    const rabbitGeo = new THREE.SphereGeometry(0.15);
+    const rabbitMat = new THREE.MeshStandardMaterial({ color: 0xffffff }); 
+    rabbitMesh = new THREE.Mesh(rabbitGeo, rabbitMat);
+    
+    bearMesh.visible = false;
+    rabbitMesh.visible = false;
+    
+    mapMesh.add(bearMesh);
+    mapMesh.add(rabbitMesh);
+}
+
+function repaintMap() {
+    const width = mapCanvas.width;
+    const height = mapCanvas.height;
+    for (let y = 0; y < height; y++) {
+        for (let x = 0; x < width; x++) {
+            const cell = currentGridData[y][x];
+            if (cell.type === 'water') mapCtx.fillStyle = '#0f5e9c';
+            else if (cell.type === 'land') {
+                const greenValue = Math.floor(180 - (cell.elevation));
+                mapCtx.fillStyle = `rgb(34, ${greenValue}, 34)`;
+            } else if (cell.type === 'mountain') mapCtx.fillStyle = '#5c5c5c';
+            else if (cell.type === 'snow') mapCtx.fillStyle = '#e2e8f0';
+            mapCtx.fillRect(x, y, 1, 1);
+        }
+    }
+    mapTexture.needsUpdate = true;
+}
+
+// The hunting animation
+function animateHunt(pathCoordinates) {
+    if (!pathCoordinates || pathCoordinates.length === 0) return;
+    
+    let currentStep = 0;
+    
+    function moveToNextTile() {
+        // Check if the bear reached the end
+        if (currentStep >= pathCoordinates.length) {
+            document.getElementById("status").innerText = "The Bear caught the Rabbit! Click anywhere to start a new hunt.";
+            startPoint = null; // A new click resets the game
+            endPoint = null;
+            return;
+        }
+        
+        const [gridX, gridY] = pathCoordinates[currentStep];
+        const targetPos = get3DPosition(gridX, gridY, mapCanvas.width, mapCanvas.height);
+        
+        const startPos = bearMesh.position.clone();
+        const stepDuration = 80; // Animation speed (milliseconds per tile)
+        const startTime = performance.now();
+        
+        // Mini animation loop for a single step
+        function stepAnimation(currentTime) {
+            const elapsed = currentTime - startTime;
+            const progress = Math.min(elapsed / stepDuration, 1.0);
+            
+            bearMesh.position.lerpVectors(startPos, targetPos, progress);
+            
+            if (progress < 1.0) {
+                requestAnimationFrame(stepAnimation);
+            } else {
+                currentStep++; // Move to next tile!
+                moveToNextTile(); 
+            }
+        }
+        
+        requestAnimationFrame(stepAnimation);
+    }
+    
+    moveToNextTile();
 }
