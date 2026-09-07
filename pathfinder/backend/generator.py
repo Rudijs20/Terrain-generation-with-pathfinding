@@ -1,7 +1,7 @@
 import random
 import math
 
-def generate_terrain(width=64, height=32, num_peaks=20, num_lakes=5, num_rivers=4):
+def generate_terrain(width=64, height=32, num_peaks=20, num_lakes=5):
             
     elevation_map = [[0.0 for _ in range(width)] for _ in range(height)]
 
@@ -93,6 +93,15 @@ def generate_terrain(width=64, height=32, num_peaks=20, num_lakes=5, num_rivers=
                         # Double check that only land is overwritten
                         if terrain_grid[y][x]["type"] == "land":
                             terrain_grid[y][x] = {"type": "water", "cost": -1, "elevation": round(normalized, 1)}                                            
+
+    # This adds polar ice caps to the top and bottom 10% of the globe
+    cap_size = int(height * 0.10) 
+    
+    for y in range(height):
+        for x in range(width):
+            if y < cap_size or y > (height - cap_size):
+                terrain_grid[y][x] = {"type": "snow", "cost": 10, "elevation": 100.0}
+
     return terrain_grid
                 
 # print a ASCII make to visualise the look

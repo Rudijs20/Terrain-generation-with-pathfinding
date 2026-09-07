@@ -110,7 +110,8 @@ def find_path(grid, start_x, start_y, end_x, end_y):
     
     return {"path": path, "total_cost": round(cost_so_far[(end_x, end_y)], 2)}
 
-# --- TESTING BLOCK ---
+
+# testing the full pathfinder on a generated map
 if __name__ == "__main__":
     from generator import generate_terrain
     
