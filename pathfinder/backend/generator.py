@@ -1,112 +1,49 @@
 import random
 import math
+from perlin_noise import PerlinNoise
 
-def generate_terrain(width=64, height=32, num_peaks=20, num_lakes=5):
-            
-    elevation_map = [[0.0 for _ in range(width)] for _ in range(height)]
-
-    peaks = []
-    for _ in range(num_peaks):
-        px = random.randint(0, width - 1)
-        py = random.randint(0, height - 1)
-
-        # Gives peak random weight (height)
-        intensity = random.uniform(50, 150)
-
-        peaks.append((px, py, intensity))
-
-        elevation_map[py][px] = round(intensity, 1) # temporary
-
-    max_elevation = 0.0
-
-# loop though every cell and checks its distance to every peak
-    for y in range(height):
-        for x in range(width):
-            cell_elevation = 0.0
-            
-            # distance to peak
-            for px, py, intensity in peaks:
-                dx = x - px
-                dy = y - py
-                
-                dist_squared = (dx * dx) + (dy * dy)
-                
-                # The spread controls how wide and smooth the mountain base is.
-                # Higher number means wider, smoother mountains.
-                spread = 30.0 
-                
-                # This creates a, smooth bell-curve mountain
-                cell_elevation += intensity * math.exp(-dist_squared / spread)
-            
-            elevation_map[y][x] = round(cell_elevation, 1)
-            max_elevation = max(max_elevation, cell_elevation)
-                    
-
-    # First generate only land, mountains and snow
-    terrain_grid = [[None for _ in range(width)] for _ in range(height)]
-    for y in range(height):
-        for x in range(width):
-            normalized = (elevation_map[y][x] / max_elevation) * 100
-            
-            if normalized < 55:
-                terrain_grid[y][x] = {"type": "land", "cost": 1, "elevation": round(normalized, 1)}
-            elif normalized < 90:
-                terrain_grid[y][x] = {"type": "mountain", "cost": 5, "elevation": round(normalized, 1)}
-            else:
-                terrain_grid[y][x] = {"type": "snow", "cost": 10, "elevation": round(normalized, 1)}
-
-    # Add lakes (They are added farther away from mountains more in lowlands)
-    max_lake_radius = max(1.5, min(width, height) * 0.08)  # adjusts lake size based on map size
-
-    for _ in range(num_lakes):
-        valid_spot = False
-        attempts = 0
-        
-        while not valid_spot and attempts < 100:
-            lx = random.randint(0, width - 1)
-            ly = random.randint(0, height - 1)
-            
-            # Check the weight (height) of this spot
-            normalized = (elevation_map[ly][lx] / max_elevation) * 100
-            
-            # This makes the lakes be added only on location bellow 50 height
-            if terrain_grid[ly][lx]["type"] == "land" and normalized < 50:
-                valid_spot = True
-                
-            attempts += 1
-
-        # Lakes stop at corners of the map and don't wrap around  
-        if valid_spot:
-            radius = random.uniform(1.0, max_lake_radius)
-            for y in range(height):
-                for x in range(width):
-                    dx = abs(x - lx)
-                    dy = abs(y - ly)
-                    
-                    if math.sqrt(dx*dx + dy*dy) <= radius:
-                        # Double check that only land is overwritten
-                        if terrain_grid[y][x]["type"] == "land":
-                            terrain_grid[y][x] = {"type": "water", "cost": -1, "elevation": round(normalized, 1)}                                            
-
-    return terrain_grid
-                
-# print a ASCII make to visualise the look
-if __name__ == "__main__":
-    test_width = 40
-    test_height = 15
-    final_map = generate_terrain(width=test_width, height=test_height, num_peaks=8)
+def generate_terrain(width=128, height=128, num_peaks=50, num_lakes=20):
+    seed = random.randint(1, 10000)
     
-    # ~ = Water, . = Land, ^ = Mountain, * = Snow
-    for row in final_map:
-        row_string = ""
-        for cell in row:
-            if cell["type"] == "water":
-                row_string += "~~"
-            elif cell["type"] == "land":
-                row_string += ".."
-            elif cell["type"] == "mountain":
-                row_string += "^^"
-            elif cell["type"] == "snow":
-                row_string += "**"
-        print(row_string)
-    print("\n")
+    noise_macro = PerlinNoise(octaves=3, seed=seed)
+    noise_micro = PerlinNoise(octaves=6, seed=seed + 1)
+    noise_jagged = PerlinNoise(octaves=12, seed=seed + 2)
+    
+    terrain_grid = [[None for _ in range(width)] for _ in range(height)]
+    noise_scale = 85.0 
+    
+    sea_level = float(num_lakes) # Slider from 0 to 80
+    peak_intensity = float(num_peaks) # Slider from 0 to 100
+    
+    # Dynamic Height and Sharpness: as peaks go up, the power curve gets sharper (1.0 to 2.0) 
+    # and the max height multiplies (80 to 230)
+    power = 1.0 + (peak_intensity / 100.0) 
+    multiplier = 80.0 + (peak_intensity * 1.5)
+
+    for y in range(height):
+        for x in range(width):
+            nx, ny = x / noise_scale, y / noise_scale
+            
+            val = noise_macro([nx, ny])
+            val += 0.5 * noise_micro([nx, ny])
+            val += 0.25 * noise_jagged([nx, ny])
+            
+            norm = (val + 0.8) / 1.6
+            norm = max(0.0, min(1.0, norm))
+            
+            absolute_elevation = math.pow(norm, power) * multiplier
+            
+            if absolute_elevation < sea_level:
+                terrain_grid[y][x] = {"type": "water", "cost": -1, "elevation": 0.0}
+            else:
+                # Relative height allows for mountains to naturally grow out of the shoreline
+                relative_height = absolute_elevation - sea_level
+                
+                if relative_height < 30:
+                    terrain_grid[y][x] = {"type": "land", "cost": 1, "elevation": round(relative_height, 1)}
+                elif relative_height < 65:
+                    terrain_grid[y][x] = {"type": "mountain", "cost": 5, "elevation": round(relative_height, 1)}
+                else:
+                    terrain_grid[y][x] = {"type": "snow", "cost": 10, "elevation": round(relative_height, 1)}
+                
+    return terrain_grid

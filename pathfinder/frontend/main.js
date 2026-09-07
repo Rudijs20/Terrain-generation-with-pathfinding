@@ -171,6 +171,14 @@ document.getElementById('generate-btn').addEventListener('click', () => {
     loadMap();
 });
 
+document.getElementById('ui-peaks').addEventListener('input', (e) => {
+    document.getElementById('peaks-val').innerText = e.target.value;
+});
+
+document.getElementById('ui-lakes').addEventListener('input', (e) => {
+    document.getElementById('lakes-val').innerText = e.target.value;
+});
+
 function onMouseClick(event) {
     mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
     mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
