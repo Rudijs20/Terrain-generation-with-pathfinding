@@ -1,7 +1,9 @@
 import heapq
 
-# This calculates the diagonal (Octile) distance between two points
 def heuristic(x1, y1, x2, y2):
+    """
+    # This calculates the diagonal (Octile) distance between two points
+    """
     dx = abs(x1 - x2)
     dy = abs(y1 - y2)
     
@@ -12,11 +14,11 @@ def heuristic(x1, y1, x2, y2):
     
     return (max_dist - min_dist) + (1.414 * min_dist)
 
-# Finds the cheapest path using gradient (steepness) pathfinding
 def find_path(grid, start_x, start_y, end_x, end_y):
     """
     Finds the cheapest path using gradient (steepness) pathfinding.
     """
+
     height = len(grid)
     width = len(grid[0])
     
@@ -30,7 +32,7 @@ def find_path(grid, start_x, start_y, end_x, end_y):
     
     cost_so_far = {(start_x, start_y): 0}
     
-    # saves last move so a line can be drawn
+    # saves last move so the line can be drawn
     came_from = {(start_x, start_y): None}
 
     while queue:
@@ -105,32 +107,3 @@ def find_path(grid, start_x, start_y, end_x, end_y):
     path.reverse()
     
     return {"path": path, "total_cost": round(cost_so_far[(end_x, end_y)], 2)}
-
-
-# testing the full pathfinder on a generated map
-if __name__ == "__main__":
-    from generator import generate_terrain
-    
-    print("Generating map...")
-    test_grid = generate_terrain(width=30, height=15, num_peaks=3, num_lakes=1)
-    
-    # Find a safe land tile to start on
-    start_point = None
-    end_point = None
-    
-    for y in range(15):
-        for x in range(30):
-            if test_grid[y][x]["type"] != "water":
-                if not start_point:
-                    start_point = (x, y)
-                else:
-                    end_point = (x, y) # Just grabs the last available land tile
-                    
-    print(f"Finding path from {start_point} to {end_point}...")
-    result = find_path(test_grid, start_point[0], start_point[1], end_point[0], end_point[1])
-    
-    if "error" in result:
-        print(result["error"])
-    else:
-        print(f"Success! Path found with {len(result['path'])} steps.")
-        print(f"Total energy cost: {result['total_cost']}")

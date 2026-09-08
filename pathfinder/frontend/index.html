@@ -6,10 +6,19 @@
     <title>2D Pathfinder</title>
     
     <style>
-        body { margin: 0; overflow: hidden; background-color: #050505; color: white; font-family: sans-serif; }
-        canvas { display: block; }
-        #ui { position: absolute; top: 10px; left: 10px; z-index: 100; }
-    </style>
+            body { margin: 0; overflow: hidden; background-color: #050505; color: white; font-family: sans-serif; }
+            canvas { display: block; }
+            #ui { position: absolute; top: 10px; left: 10px; z-index: 100; }
+            
+            body::after {
+                content: '';
+                position: absolute;
+                top: 0; left: 0; right: 0; bottom: 0;
+                background: radial-gradient(circle, transparent 40%, rgba(5, 5, 5, 0.95) 120%);
+                pointer-events: none; /* Lets mouse clicks pass through to the game */
+                z-index: 50;
+            }
+        </style>
 
     <!-- Dont install the whole three.js but rather tell browser where to find it -->
     <script type="importmap">
@@ -45,6 +54,15 @@
             </div>
             <input type="range" id="ui-lakes" min="0" max="80" value="20" style="width: 100%; cursor: pointer;">
         </label>
+
+        <div style="display: flex; gap: 10px; margin-bottom: 15px; background: #222; padding: 5px; border-radius: 4px; border: 1px solid #555;">
+            <label style="flex: 1; text-align: center; cursor: pointer; color: white;">
+                <input type="radio" name="game-mode" value="1" checked> Tech Demo
+            </label>
+            <label style="flex: 1; text-align: center; cursor: pointer; color: white;">
+                <input type="radio" name="game-mode" value="2"> Play Game
+            </label>
+        </div>
 
         <button id="generate-btn" style="width: 100%; padding: 10px; cursor: pointer; background: #4CAF50; color: white; border: none; border-radius: 4px; font-weight: bold; margin-bottom: 10px;">Generate New World</button>
         

@@ -3,6 +3,9 @@ import math
 from perlin_noise import PerlinNoise
 
 def generate_terrain(width=128, height=128, num_peaks=50, num_lakes=20):
+    """
+    Generates a randomised 2D terrain grid with dynamically changable elevation data using Perlin noise.
+    """
     seed = random.randint(1, 10000)
     
     noise_macro = PerlinNoise(octaves=3, seed=seed)
@@ -38,7 +41,8 @@ def generate_terrain(width=128, height=128, num_peaks=50, num_lakes=20):
             else:
                 # Relative height allows for mountains to naturally grow out of the shoreline
                 relative_height = absolute_elevation - sea_level
-                
+
+                # Here the terrain type is determined based on the relative height above sea level
                 if relative_height < 30:
                     terrain_grid[y][x] = {"type": "land", "cost": 1, "elevation": round(relative_height, 1)}
                 elif relative_height < 65:
