@@ -1,3 +1,5 @@
+**Project Repository:** https://github.com/Rudijs20/Bit_CS_assignment
+
 # Tabletop Pathfinder
 
 ## Overview
@@ -46,5 +48,7 @@ The frontend uses Three.js to translate 2D arrays into a 3D physical world.
 
 ## Improvements and Remarks
 What could have been improved are the visual aspects of the map. I would have liked to make it look more detailed with custom textures for the animal models and the ground, as well as adding more different terrain types.
+
+Also a seperate 
 
 While completing this project, I encountered issues with how the initial globe version looked. I wasn't happy with the visual distortion, which led to the decision to restructure the project into a 2D flat tabletop map. This pivot added extra development time, meaning the final 2D version doesn't have quite as many visual or gameplay features as I originally envisioned. However, despite the shift in scope, the core A* pathfinder works nicely and efficiently and the terrain generation looks nicely natural.

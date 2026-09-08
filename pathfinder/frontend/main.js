@@ -31,6 +31,12 @@ let activeHuntId = 0; // This allows for killing the old mode 1 animations if us
 
 
 // --- core logic ---
+/**
+ * Map Generation Pipeline: Fetches procedural terrain data from the Python Flask API based 
+ * on user UI slider inputs. It performs two main rendering tasks:
+ * 1. Paints a 2D canvas with biome colors to create the flat map texture.
+ * 2. Generates a 3D PlaneGeometry for which it modifies the Z axis of individual vertices to match the elevation data.
+ */
 async function loadMap() {
     statusText.innerText = "Fetching map data from Python...";
 
@@ -75,26 +81,54 @@ async function loadMap() {
         mapTexture.minFilter = THREE.NearestFilter;
 
         const tileSize = 0.25; 
-        const geometry = new THREE.PlaneGeometry(data.width * tileSize, data.height * tileSize, data.width - 1, data.height - 1);
+        const physicalWidth = (data.width - 1) * tileSize;
+        const physicalHeight = (data.height - 1) * tileSize;
         
-        // Extrude the vertices based on elevation data making it look 3d
+        const cols = data.width + 2;
+        const rows = data.height + 2;
+        const geometry = new THREE.PlaneGeometry(physicalWidth, physicalHeight, cols - 1, rows - 1);
         const vertices = geometry.attributes.position.array;
+        const uvs = geometry.attributes.uv.array;
         
         for (let i = 0; i < vertices.length; i += 3) {
-            const gridX = (i / 3) % data.width;
-            const gridY = Math.floor((i / 3) / data.width);
-            const cell = currentGridData[gridY][gridX];
+            const vIdx = i / 3;
+            const c = vIdx % cols;
+            const r = Math.floor(vIdx / cols);
             
-            if (cell.type !== 'water') {
-                vertices[i + 2] = (cell.elevation / 100) * 3; 
+            const gridX = Math.max(0, Math.min(c - 1, data.width - 1));
+            const gridY = Math.max(0, Math.min(r - 1, data.height - 1));
+            
+            const cell = currentGridData[gridY][gridX];
+            let z = cell.type !== 'water' ? (cell.elevation / 100) * 3 : -0.2;
+            
+            if (c === 0 || c === cols - 1 || r === 0 || r === rows - 1) {
+                z = -2.0; // The bottom depth of the diorama
             }
+            
+            const localX = (gridX * tileSize) - (physicalWidth / 2);
+            const localY = -((gridY * tileSize) - (physicalHeight / 2));
+            
+            vertices[i] = localX;
+            vertices[i + 1] = localY;
+            vertices[i + 2] = z;
+            
+            // Stretch the texture slightly over the edges so it streaks down the walls
+            uvs[vIdx * 2] = gridX / (data.width - 1);
+            uvs[vIdx * 2 + 1] = 1.0 - (gridY / (data.height - 1));
         }
         
         geometry.computeVertexNormals();
         const material = new THREE.MeshStandardMaterial({ map: mapTexture, flatShading: true });
         mapMesh = new THREE.Mesh(geometry, material);
         
-        // Lay the board flat like a table on the floor
+        // Add a solid bottom plate to cap the box underneath
+        const baseGeo = new THREE.PlaneGeometry(physicalWidth, physicalHeight);
+        const baseMat = new THREE.MeshStandardMaterial({ color: 0x111111 });
+        const baseMesh = new THREE.Mesh(baseGeo, baseMat);
+        baseMesh.position.z = -2.0;
+        baseMesh.rotation.y = Math.PI; // Face the material outwards
+        mapMesh.add(baseMesh);
+        
         mapMesh.rotation.x = -Math.PI / 2;
         scene.add(mapMesh);
 
@@ -106,7 +140,12 @@ async function loadMap() {
         statusText.innerText = "Error loading map. Is Flask running?";
     }
 }
-
+/**
+ * Mode 2 Game Engine: Manages the real-time continuous chase state.
+ * Utilizes two independent timers (setInterval) to allow the Rabbit to process steps slightly 
+ * faster (200ms) than the Bear (280ms). On every tick, actors consume their path arrays, update 
+ * their physical target positions, and check for a collision (Game Over condition).
+ */
 function startGameLoop() {
     isChasing = true;
     rabbitPathData = [];
