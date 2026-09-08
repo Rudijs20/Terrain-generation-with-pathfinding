@@ -19,7 +19,7 @@ export function initEnvironment() {
     controls.maxPolarAngle = Math.PI / 2.2;
     controls.minPolarAngle = Math.PI / 4;
 
-    scene.fog = new THREE.FogExp2(0x050505, 0.015);
+    scene.fog = new THREE.FogExp2(0x050505, 0.003);
 
     const ambientLight = new THREE.AmbientLight(0xffffff, 0.35);
     scene.add(ambientLight);

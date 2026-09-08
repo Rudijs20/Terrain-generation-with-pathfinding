@@ -24,6 +24,9 @@ let chaseInterval = null;
 let rabbitPathData = [];
 let bearPathData = [];
 
+let bearTargetPos = new THREE.Vector3();
+let rabbitTargetPos = new THREE.Vector3();
+
 
 // --- core logic ---
 async function loadMap() {
@@ -117,14 +120,14 @@ function startGameLoop() {
         if (rabbitPathData.length > 0) {
             const nextR = rabbitPathData.shift();
             rabbitGridPos = { x: nextR[0], y: nextR[1] };
-            rabbitMesh.position.copy(get3DPosition(rabbitGridPos.x, rabbitGridPos.y, mapCanvas.width, mapCanvas.height));
+            rabbitTargetPos.copy(get3DPosition(rabbitGridPos.x, rabbitGridPos.y, mapCanvas.width, mapCanvas.height));
             rabbitMoved = true;
         }
         
         if (bearPathData.length > 0) {
             const nextB = bearPathData.shift();
             bearGridPos = { x: nextB[0], y: nextB[1] };
-            bearMesh.position.copy(get3DPosition(bearGridPos.x, bearGridPos.y, mapCanvas.width, mapCanvas.height));
+            bearTargetPos.copy(get3DPosition(bearGridPos.x, bearGridPos.y, mapCanvas.width, mapCanvas.height));
         }
         
         if (bearGridPos.x === rabbitGridPos.x && bearGridPos.y === rabbitGridPos.y) {
@@ -176,6 +179,29 @@ function animateHunt(pathCoordinates) {
 function animate() {
     requestAnimationFrame(animate);
     controls.update();
+
+    if (gameMode === 2 && isChasing) {
+        // Smoothly slide the Bear and rotate to face the target
+        if (bearMesh && bearMesh.visible) {
+            bearMesh.position.lerp(bearTargetPos, 0.15);
+            const dx = bearTargetPos.x - bearMesh.position.x;
+            const dy = bearTargetPos.y - bearMesh.position.y;
+            if (Math.abs(dx) > 0.01 || Math.abs(dy) > 0.01) {
+                bearMesh.rotation.z = Math.atan2(dy, dx) - Math.PI / 2;
+            }
+        }
+        
+        // Smoothly slide the Rabbit and rotate to face the target
+        if (rabbitMesh && rabbitMesh.visible) {
+            rabbitMesh.position.lerp(rabbitTargetPos, 0.15);
+            const dx = rabbitTargetPos.x - rabbitMesh.position.x;
+            const dy = rabbitTargetPos.y - rabbitMesh.position.y;
+            if (Math.abs(dx) > 0.01 || Math.abs(dy) > 0.01) {
+                rabbitMesh.rotation.z = Math.atan2(dy, dx) - Math.PI / 2;
+            }
+        }
+    }
+
     renderer.render(scene, camera);
 }
 
@@ -246,20 +272,28 @@ function onMouseClick(event) {
             startPoint = null; 
         }
     } else if (gameMode === 2) {
-        // Mode 2: first click bear, second rabbit, and then subsequent clicks move the rabbit
+        // Mode 2: first click bear then second rabbit and then subsequent clicks move the rabbit
         if (!startPoint) {
             repaintMap();
             startPoint = { x: gridX, y: gridY };
             bearGridPos = { x: gridX, y: gridY };
             bearMesh.visible = true;
             rabbitMesh.visible = false;
-            bearMesh.position.copy(get3DPosition(gridX, gridY, mapCanvas.width, mapCanvas.height));
+            
+            const pos = get3DPosition(gridX, gridY, mapCanvas.width, mapCanvas.height);
+            bearMesh.position.copy(pos);
+            bearTargetPos.copy(pos);
+            
             statusText.innerText = "Bear spawned. Click to spawn Rabbit and START!";
         } else if (!isChasing) {
             endPoint = { x: gridX, y: gridY };
             rabbitGridPos = { x: gridX, y: gridY };
             rabbitMesh.visible = true;
-            rabbitMesh.position.copy(get3DPosition(gridX, gridY, mapCanvas.width, mapCanvas.height));
+            
+            const pos = get3DPosition(gridX, gridY, mapCanvas.width, mapCanvas.height);
+            rabbitMesh.position.copy(pos);
+            rabbitTargetPos.copy(pos);
+            
             statusText.innerText = "CHASE STARTED! Click anywhere to move the Rabbit.";
             startGameLoop(); 
         } else {
@@ -285,14 +319,20 @@ async function fetchPath(start, end) {
 async function fetchRabbitPath(start, end) {
     try {
         const data = await getPathData(start.x, start.y, end.x, end.y);
-        if (!data.error) rabbitPathData = data.path;
+        if (!data.error) {
+            if (data.path.length > 0 && data.path[0][0] === rabbitGridPos.x && data.path[0][1] === rabbitGridPos.y) data.path.shift();
+            rabbitPathData = data.path;
+        }
     } catch (err) { console.error(err); }
 }
 
 async function fetchBearPath(start, end) {
     try {
         const data = await getPathData(start.x, start.y, end.x, end.y);
-        if (!data.error) bearPathData = data.path;
+        if (!data.error) {
+            if (data.path.length > 0 && data.path[0][0] === bearGridPos.x && data.path[0][1] === bearGridPos.y) data.path.shift();
+            bearPathData = data.path;
+        }
     } catch (err) { console.error(err); }
 }
 
@@ -313,12 +353,21 @@ function get3DPosition(gridX, gridY, width, height) {
 function spawnActors(width, height) {
     if (bearMesh) mapMesh.remove(bearMesh);
     if (rabbitMesh) mapMesh.remove(rabbitMesh);
-    bearMesh = createBear();
-    rabbitMesh = createBunny();
-    bearMesh.rotation.x = Math.PI / 2;
-    rabbitMesh.rotation.x = Math.PI / 2;
+    
+    // Group so we can rotate the models while they move around the map
+    bearMesh = new THREE.Group();
+    const bModel = createBear();
+    bModel.rotation.x = Math.PI / 2;
+    bearMesh.add(bModel);
+    
+    rabbitMesh = new THREE.Group();
+    const rModel = createBunny();
+    rModel.rotation.x = Math.PI / 2;
+    rabbitMesh.add(rModel);
+    
     bearMesh.visible = false;
     rabbitMesh.visible = false;
+    
     mapMesh.add(bearMesh);
     mapMesh.add(rabbitMesh);
 }
