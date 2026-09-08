@@ -20,12 +20,14 @@ let endPoint = null;
 const statusText = document.getElementById("status");
 
 let isChasing = false;
-let chaseInterval = null;
+let rabbitInterval = null;
+let bearInterval = null;
 let rabbitPathData = [];
 let bearPathData = [];
 
 let bearTargetPos = new THREE.Vector3();
 let rabbitTargetPos = new THREE.Vector3();
+let activeHuntId = 0; // This allows for killing the old mode 1 animations if user clicks early
 
 
 // --- core logic ---
@@ -110,45 +112,63 @@ function startGameLoop() {
     rabbitPathData = [];
     bearPathData = [];
     
-    if (chaseInterval) clearInterval(chaseInterval);
+    if (rabbitInterval) clearInterval(rabbitInterval);
+    if (bearInterval) clearInterval(bearInterval);
+    
     fetchBearPath(bearGridPos, rabbitGridPos);
     
-    chaseInterval = setInterval(() => {
+    // Checks bear and rabbit collision and ends the game if they meet
+    function checkGameOver() {
+        if (bearGridPos.x === rabbitGridPos.x && bearGridPos.y === rabbitGridPos.y) {
+            statusText.innerText = "GAME OVER! The Bear caught you! Click to reset.";
+            clearInterval(rabbitInterval);
+            clearInterval(bearInterval);
+            isChasing = false;
+            startPoint = null; 
+        }
+    }
+    
+    // Rabbit is faster: runs every 200ms)
+    rabbitInterval = setInterval(() => {
         if (!isChasing) return;
-        let rabbitMoved = false;
         
         if (rabbitPathData.length > 0) {
             const nextR = rabbitPathData.shift();
             rabbitGridPos = { x: nextR[0], y: nextR[1] };
             rabbitTargetPos.copy(get3DPosition(rabbitGridPos.x, rabbitGridPos.y, mapCanvas.width, mapCanvas.height));
-            rabbitMoved = true;
+            
+            drawMode2Paths();
+            fetchBearPath(bearGridPos, rabbitGridPos); // Bear reacts to the move
+            checkGameOver();
         }
+    }, 200); 
+
+    // Bear is slower: runs every 280ms)
+    bearInterval = setInterval(() => {
+        if (!isChasing) return;
         
         if (bearPathData.length > 0) {
             const nextB = bearPathData.shift();
             bearGridPos = { x: nextB[0], y: nextB[1] };
             bearTargetPos.copy(get3DPosition(bearGridPos.x, bearGridPos.y, mapCanvas.width, mapCanvas.height));
+            
+            drawMode2Paths();
+            checkGameOver();
         }
-        
-        if (bearGridPos.x === rabbitGridPos.x && bearGridPos.y === rabbitGridPos.y) {
-            statusText.innerText = "GAME OVER! The Bear caught you! Click to reset.";
-            clearInterval(chaseInterval);
-            isChasing = false;
-            startPoint = null; 
-            return;
-        }
-        
-        drawMode2Paths();
-        if (rabbitMoved) fetchBearPath(bearGridPos, rabbitGridPos);
-        
-    }, 250); 
+    }, 280); 
 }
 
+// The hunting animation (Mode 1)
 function animateHunt(pathCoordinates) {
     if (!pathCoordinates || pathCoordinates.length === 0) return;
+    
+    activeHuntId++; // Start a new unique hunt
+    const myHuntId = activeHuntId; 
     let currentStep = 0;
     
     function moveToNextTile() {
+        if (myHuntId !== activeHuntId) return; // Abort if user clicked early!
+        
         if (currentStep >= pathCoordinates.length) {
             statusText.innerText = "The Bear caught the Rabbit! Click anywhere to start a new hunt.";
             startPoint = null; 
@@ -159,9 +179,19 @@ function animateHunt(pathCoordinates) {
         const [gridX, gridY] = pathCoordinates[currentStep];
         const targetPos = get3DPosition(gridX, gridY, mapCanvas.width, mapCanvas.height);
         const startPos = bearMesh.position.clone();
+        
+        // Mode 1 Rotation Math
+        const dx = targetPos.x - startPos.x;
+        const dy = targetPos.y - startPos.y;
+        if (Math.abs(dx) > 0.01 || Math.abs(dy) > 0.01) {
+            bearMesh.rotation.z = Math.atan2(dy, dx) - Math.PI / 2;
+        }
+        
         const startTime = performance.now();
         
         function stepAnimation(currentTime) {
+            if (myHuntId !== activeHuntId) return;
+            
             const progress = Math.min((currentTime - startTime) / 80, 1.0);
             bearMesh.position.lerpVectors(startPos, targetPos, progress);
             
@@ -227,7 +257,11 @@ document.getElementById('ui-lakes').addEventListener('input', (e) => document.ge
 document.querySelectorAll('input[name="game-mode"]').forEach(radio => {
     radio.addEventListener('change', (e) => {
         gameMode = parseInt(e.target.value);
-        if (chaseInterval) clearInterval(chaseInterval);
+        
+        if (rabbitInterval) clearInterval(rabbitInterval);
+        if (bearInterval) clearInterval(bearInterval);
+        activeHuntId++; // Instantly kills any running Mode 1 animation!
+        
         isChasing = false;
         rabbitPathData = [];
         bearPathData = [];
@@ -236,6 +270,7 @@ document.querySelectorAll('input[name="game-mode"]').forEach(radio => {
         bearMesh.visible = false;
         rabbitMesh.visible = false;
         repaintMap();
+        
         statusText.innerText = `Mode ${gameMode} Active. Click to spawn the Bear!`;
     });
 });
@@ -257,6 +292,7 @@ function onMouseClick(event) {
     if (gameMode === 1) {
         // Mode 1: first click sets bear, second click sets rabbit and triggers animation
         if (!startPoint) {
+            activeHuntId++; // Kill the old animation if Bear is still running
             repaintMap(); 
             startPoint = { x: gridX, y: gridY };
             statusText.innerText = `Bear spawned. Click destination for the Rabbit!`;
